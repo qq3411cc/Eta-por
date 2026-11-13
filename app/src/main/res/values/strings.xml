@@ -1175,6 +1175,7 @@
   <string name="speech_preview_loading">正在合成…</string>
   <string name="speech_group_assistant">助手</string>
   <string name="speech_group_connection">连接</string>
+  <string name="speech_group_local">本地模型</string>
   <string name="speech_group_voice">声音</string>
   <string name="speech_auto_speak">自动播报回答</string>
   <string name="speech_auto_speak_summary">仅在助手浮窗可见时播报语音提问的最终回答</string>
@@ -1189,6 +1190,7 @@
   <string name="speech_asr_qwen_flash">千问 · 短音频识别</string>
   <string name="speech_asr_qwen_file">千问 · 文件转写</string>
   <string name="speech_asr_doubao">豆包 · 流式识别 2.0</string>
+  <string name="speech_asr_local">本地离线识别</string>
   <string name="speech_tts_none">关闭</string>
   <string name="speech_tts_system">系统语音</string>
   <string name="speech_tts_qwen">千问</string>
@@ -1197,6 +1199,13 @@
   <string name="speech_asr_note_streaming">边说边显示文字。聊天听写点击完成；助手浮窗可在停顿后自动提交。</string>
   <string name="speech_asr_note_flash">录音完成后上传识别，适合短句输入。</string>
   <string name="speech_asr_note_file">录音先上传自有 OSS，再异步转写，等待时间较长。</string>
+  <string name="speech_asr_note_local">录音在本机推理，不联网、不需要密钥。首次识别会加载模型，之后常驻。</string>
+  <string name="speech_local_model_dir">模型目录</string>
+  <string name="speech_local_model_type">模型类型</string>
+  <string name="speech_local_threads">推理线程</string>
+  <string name="speech_local_language">识别语言</string>
+  <string name="speech_local_backend_ready">离线识别组件已编入，可直接使用。</string>
+  <string name="speech_local_backend_missing">当前安装包未包含离线识别组件（sherpa-onnx），需要带 AAR 的构建。</string>
   <string name="speech_region">地域</string>
   <string name="speech_region_beijing">北京</string>
   <string name="speech_region_singapore">新加坡</string>
@@ -1214,6 +1223,9 @@
   <string name="speech_refine_title">智能纠错</string>
   <string name="speech_refine_summary">用当前对话模型修正同音字和中英文术语，会增加少量延迟和费用</string>
   <string name="voice_release_to_send">松开发送，移出取消</string>
+  <string name="voice_swipe_up_send">上滑发送</string>
+  <string name="voice_swipe_down_cancel">下滑取消</string>
+  <string name="voice_swipe_hint">上滑发送 · 下滑取消</string>
   <string name="speech_legacy_auth">使用旧版鉴权</string>
   <string name="speech_advanced">高级设置</string>
   <string name="speech_expand">展开</string>

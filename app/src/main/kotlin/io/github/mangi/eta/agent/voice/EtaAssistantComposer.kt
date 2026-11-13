@@ -11,6 +11,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -107,7 +108,7 @@ internal fun AssistantComposer(
             label = "assistant_input_mode",
         ) { voiceMode ->
             if (voiceMode) {
-                AssistantVoiceEntry(speech, input, onKeyboard, onFinishSpeech)
+                AssistantVoiceEntry(speech, input, onKeyboard, onFinishSpeech, onCancelSpeech)
             } else {
                 AssistantInputBar(
                     state = state,
@@ -345,22 +346,71 @@ private fun AssistantVoiceEntry(
     input: String,
     onKeyboard: () -> Unit,
     onFinishSpeech: () -> Unit,
+    onCancelSpeech: () -> Unit,
 ) {
     val controls = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(400)
         controls.animateTo(1f, tween(180))
     }
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
-        Text(
-            text = input.ifBlank {
-                stringResource(
-                    if (speech.phase == EtaSpeechPhase.RECOGNIZING) {
-                        R.string.voice_recognizing
-                    } else {
-                        R.string.voice_listening
+    // 0 无方向，1 上滑发送，-1 下滑取消；用于文字区实时提示。
+    var swipeHint by remember { mutableStateOf(0) }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(speech.phase) {
+                val threshold = 56.dp.toPx()
+                var accumulated = 0f
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        accumulated = 0f
+                        swipeHint = 0
+                    },
+                    onDragCancel = {
+                        accumulated = 0f
+                        swipeHint = 0
+                    },
+                    onDragEnd = {
+                        // 上滑发送、下滑取消；位移不够时不做任何事，保持原状继续录音。
+                        when {
+                            accumulated <= -threshold -> {
+                                swipeHint = 0
+                                onFinishSpeech()
+                            }
+                            accumulated >= threshold -> {
+                                swipeHint = 0
+                                onCancelSpeech()
+                            }
+                        }
+                        accumulated = 0f
+                        swipeHint = 0
+                    },
+                    onVerticalDrag = { change, dragAmount ->
+                        accumulated += dragAmount
+                        swipeHint = when {
+                            accumulated <= -threshold -> 1
+                            accumulated >= threshold -> -1
+                            else -> 0
+                        }
+                        change.consume()
                     },
                 )
+            },
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Text(
+            text = input.ifBlank {
+                when (swipeHint) {
+                    1 -> stringResource(R.string.voice_swipe_up_send)
+                    -1 -> stringResource(R.string.voice_swipe_down_cancel)
+                    else -> stringResource(
+                        if (speech.phase == EtaSpeechPhase.RECOGNIZING) {
+                            R.string.voice_recognizing
+                        } else {
+                            R.string.voice_listening
+                        },
+                    )
+                }
             },
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,

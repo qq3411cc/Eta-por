@@ -18,6 +18,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
+/** 录音电平达到这个值视为「有人说话」；低于它并持续 autoSendSilenceMs 即判定说完。 */
+private const val AUTO_STOP_LEVEL = 0.03f
+
 internal data class SpeechInputState(
     val phase: EtaSpeechPhase = EtaSpeechPhase.IDLE,
     val preview: String = "",
@@ -74,8 +77,11 @@ internal class SpeechInputController(
                     capturing = true
                 }
                 lease = SpeechAudioLease(context) { cancel() }.also { it.acquire(playback = false) }
-                val secrets = credentials ?: if (config.asr == AsrProvider.SYSTEM) SpeechCredentials()
-                    else SpeechSettingsRepository.credentials(context)
+                val secrets = credentials ?: if (config.asr == AsrProvider.SYSTEM || config.asr == AsrProvider.LOCAL) {
+                    SpeechCredentials()
+                } else {
+                    SpeechSettingsRepository.credentials(context)
+                }
                 validateSpeechSettings(config, secrets, synthesis = false)
                 val endpointSilenceMs = if (automaticEndpoint && !holdToTalk) config.autoSendSilenceMs else 0
                 autoSubmit = endpointSilenceMs > 0
@@ -93,13 +99,37 @@ internal class SpeechInputController(
                     }
                     val text = coroutineScope {
                         var recording: Job? = null
+                        // 文件模式（含本地离线识别）没有服务端 VAD：用录音电平判定「说完停顿」，
+                        // 连续 endpointSilenceMs 没有声音就自动结束录音，结果直接发送，不必点完成。
+                        var lastVoiceAt = 0L
+                        var heardSpeech = false
                         val begin = {
                             if (recording == null) {
                                 recording = launch {
                                     try {
                                         audio.record(
-                                            onReady = { update { it.copy(phase = EtaSpeechPhase.LISTENING, progress = "正在聆听，点击完成结束") } },
-                                            onLevel = { level -> update { it.copy(level = level) } },
+                                            onReady = {
+                                                update {
+                                                    it.copy(
+                                                        phase = EtaSpeechPhase.LISTENING,
+                                                        progress = if (endpointSilenceMs > 0) "正在聆听，停顿自动发送"
+                                                        else "正在聆听，点击完成结束",
+                                                    )
+                                                }
+                                            },
+                                            onLevel = { level ->
+                                                update { it.copy(level = level) }
+                                                if (endpointSilenceMs > 0) {
+                                                    val now = System.currentTimeMillis()
+                                                    if (level >= AUTO_STOP_LEVEL) {
+                                                        heardSpeech = true
+                                                        lastVoiceAt = now
+                                                    } else if (heardSpeech && now - lastVoiceAt >= endpointSilenceMs) {
+                                                        // 说过话后持续静音达到阈值：结束录音，交给识别与发送。
+                                                        audio.finish()
+                                                    }
+                                                }
+                                            },
                                         )
                                     } finally {
                                         if (generation == session) releaseCapture()

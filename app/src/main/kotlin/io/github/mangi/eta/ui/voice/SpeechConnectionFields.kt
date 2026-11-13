@@ -8,14 +8,19 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import io.github.mangi.eta.R
+import io.github.mangi.eta.agent.voice.LocalAsrBackends
+import io.github.mangi.eta.agent.voice.LocalAsrSupport
 import io.github.mangi.eta.data.model.AsrProvider
 import io.github.mangi.eta.data.model.DoubaoSpeechConfig
+import io.github.mangi.eta.data.model.LocalSpeechConfig
 import io.github.mangi.eta.data.model.QwenSpeechConfig
 import io.github.mangi.eta.data.model.SpeechCredentialField
 import io.github.mangi.eta.data.model.SpeechRegion
@@ -32,7 +37,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 internal fun SpeechConnectionSection(store: SpeechSettingsStore, synthesis: Boolean) {
     if (!synthesis) {
-        QwenDoubaoConnectionSection(store, synthesis = false)
+        if (store.settings.asr == AsrProvider.LOCAL) {
+            LocalAsrConnectionSection(store)
+        } else {
+            QwenDoubaoConnectionSection(store, synthesis = false)
+        }
         return
     }
     when (store.settings.tts) {
@@ -40,6 +49,72 @@ internal fun SpeechConnectionSection(store: SpeechSettingsStore, synthesis: Bool
         TtsProvider.QWEN, TtsProvider.DOUBAO -> QwenDoubaoConnectionSection(store, synthesis = true)
         TtsProvider.GEMINI -> GeminiConnectionSection(store)
         TtsProvider.MINIMAX -> MiniMaxConnectionSection(store)
+    }
+}
+
+/**
+ * 本地离线识别配置：模型目录、模型类型、线程数。
+ *
+ * 不涉及任何凭据与网络地址；模型就绪状态与后端是否编入都直接显示在这里，
+ * 避免用户点了「测试识别」才发现模型缺失。
+ */
+@Composable
+private fun LocalAsrConnectionSection(store: SpeechSettingsStore) {
+    val context = LocalContext.current
+    val settings = store.settings
+    val local = settings.localAsr
+    val change: (LocalSpeechConfig) -> Unit = { store.edit(settings.copy(localAsr = it)) }
+    val readiness = remember(local.modelDir, local.modelType) {
+        LocalAsrSupport.readiness(context, local)
+    }
+    val backend = remember { LocalAsrBackends.current(context) }
+    Column {
+        EtaPreferenceGroupTitle(stringResource(R.string.speech_group_local))
+        EtaPreferenceGroup {
+            SpeechFieldColumn {
+                SpeechField(
+                    label = stringResource(R.string.speech_local_model_dir),
+                    value = local.modelDir,
+                    onChange = { change(local.copy(modelDir = it.trim())) },
+                )
+            }
+            EtaPreferenceDivider(hasLeading = false)
+            EtaOverlayDropdownPreference(
+                title = stringResource(R.string.speech_local_model_type),
+                items = LocalSpeechConfig.MODEL_TYPES,
+                selectedIndex = LocalSpeechConfig.MODEL_TYPES.indexOf(local.modelType).coerceAtLeast(0),
+                onSelectedIndexChange = { index ->
+                    LocalSpeechConfig.MODEL_TYPES.getOrNull(index)?.let { change(local.copy(modelType = it)) }
+                },
+            )
+            EtaPreferenceDivider(hasLeading = false)
+            EtaOverlayDropdownPreference(
+                title = stringResource(R.string.speech_local_threads),
+                items = LocalSpeechConfig.THREAD_OPTIONS.map { it.toString() },
+                selectedIndex = LocalSpeechConfig.THREAD_OPTIONS.indexOf(local.threads).coerceAtLeast(0),
+                onSelectedIndexChange = { index ->
+                    LocalSpeechConfig.THREAD_OPTIONS.getOrNull(index)?.let { change(local.copy(threads = it)) }
+                },
+            )
+            if (local.modelType == LocalSpeechConfig.MODEL_SENSE_VOICE) {
+                EtaPreferenceDivider(hasLeading = false)
+                EtaOverlayDropdownPreference(
+                    title = stringResource(R.string.speech_local_language),
+                    items = LocalSpeechConfig.LANGUAGE_OPTIONS,
+                    selectedIndex = LocalSpeechConfig.LANGUAGE_OPTIONS.indexOf(local.language).coerceAtLeast(0),
+                    onSelectedIndexChange = { index ->
+                        LocalSpeechConfig.LANGUAGE_OPTIONS.getOrNull(index)?.let { change(local.copy(language = it)) }
+                    },
+                )
+            }
+        }
+        SpeechNote(readiness)
+        SpeechNote(
+            stringResource(
+                if (backend.available) R.string.speech_local_backend_ready
+                else R.string.speech_local_backend_missing,
+            ),
+        )
     }
 }
 

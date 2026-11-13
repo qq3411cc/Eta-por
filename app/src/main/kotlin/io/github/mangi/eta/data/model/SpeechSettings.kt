@@ -3,7 +3,7 @@ package io.github.mangi.eta.data.model
 import kotlinx.serialization.Serializable
 
 @Serializable
-enum class AsrProvider { SYSTEM, QWEN_REALTIME, QWEN_FLASH, QWEN_FILE, DOUBAO }
+enum class AsrProvider { SYSTEM, QWEN_REALTIME, QWEN_FLASH, QWEN_FILE, DOUBAO, LOCAL }
 
 @Serializable
 enum class TtsProvider { NONE, SYSTEM, QWEN, DOUBAO, GEMINI, MINIMAX }
@@ -19,6 +19,32 @@ data class QwenSpeechConfig(
     fun endpoint(): String = baseUrl.trim().trimEnd('/').ifEmpty {
         if (region == SpeechRegion.BEIJING) "https://dashscope.aliyuncs.com"
         else "https://dashscope-intl.aliyuncs.com"
+    }
+}
+
+/**
+ * 本地（离线）识别配置。
+ *
+ * 模型不随包分发：默认目录是应用私有 `files/models/asr`，`modelDir` 非空时按绝对路径读取。
+ * 目录内需要 `model.int8.onnx`（或 `model.onnx`）与 `tokens.txt`。
+ */
+@Serializable
+data class LocalSpeechConfig(
+    /** 空表示使用默认目录 `<filesDir>/models/asr`。 */
+    val modelDir: String = "",
+    /** paraformer 或 sensevoice。 */
+    val modelType: String = "paraformer",
+    /** 推理线程数，1–8。 */
+    val threads: Int = 2,
+    /** 仅 sensevoice 使用：zh / yue / en / ja / ko。 */
+    val language: String = "zh",
+) {
+    companion object {
+        const val MODEL_PARAFORMER = "paraformer"
+        const val MODEL_SENSE_VOICE = "sensevoice"
+        val MODEL_TYPES = listOf(MODEL_PARAFORMER, MODEL_SENSE_VOICE)
+        val THREAD_OPTIONS = listOf(1, 2, 3, 4)
+        val LANGUAGE_OPTIONS = listOf("zh", "yue", "en", "ja", "ko")
     }
 }
 
@@ -76,6 +102,8 @@ data class SpeechSettings(
     val language: String = "",
     val qwenAsr: QwenSpeechConfig = QwenSpeechConfig(),
     val qwenTts: QwenSpeechConfig = QwenSpeechConfig(),
+    /** 本地（离线）识别配置；只在 asr 选 LOCAL 时使用。 */
+    val localAsr: LocalSpeechConfig = LocalSpeechConfig(),
     val doubaoAsr: DoubaoSpeechConfig = DoubaoSpeechConfig(),
     val doubaoTts: DoubaoSpeechConfig = DoubaoSpeechConfig(),
     val qwenVoice: String = "Cherry",

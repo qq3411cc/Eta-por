@@ -77,3 +77,16 @@
 # 虚拟屏幕悬浮小窗
 -keep class io.github.mangi.eta.agent.display.VirtualScreenFloatWindow { *; }
 -keepclassmembers class io.github.mangi.eta.agent.display.VirtualScreenFloatWindow$* { *; }
+
+# 离线语音：LocalAsrBackends 按固定类名反射装配，R8 不得重命名或裁剪。
+-keep class io.github.mangi.eta.agent.voice.local.SherpaLocalAsrBackend { *; }
+-keep class io.github.mangi.eta.agent.voice.LocalAsrBackends { *; }
+# sherpa-onnx JNI 桥：native 方法按类名与签名绑定。
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+-dontwarn com.k2fsa.sherpa.onnx.**
+
+# 离线语音引擎（sherpa-onnx / onnxruntime）的 JNI 对内存布局和调用时序敏感。
+# release 构建实测：开启 R8 优化后，加载模型会在 ART 的 HeapTaskDaemon 上
+# SIGABRT（pthread_mutex_lock called on a destroyed mutex），debug 构建不崩。
+# 因此 release 只保留裁剪与混淆，禁用优化。
+-dontoptimize

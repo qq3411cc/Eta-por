@@ -6,6 +6,9 @@ plugins {
 }
 
 val releaseStoreFile = System.getenv("ETA_RELEASE_STORE_FILE")
+
+/** 离线语音引擎 AAR：只有存在时才编译 src/localasr 并作为依赖打包；缺失时构建不受影响。 */
+val localAsrAar = file("libs/sherpa-onnx.aar")
 val releaseStorePassword = System.getenv("ETA_RELEASE_STORE_PASSWORD")
 val releaseKeyAlias = System.getenv("ETA_RELEASE_KEY_ALIAS")
 val releaseKeyPassword = System.getenv("ETA_RELEASE_KEY_PASSWORD")
@@ -112,6 +115,20 @@ android {
         compose = true
     }
 
+    /**
+     * 离线语音：只有 app/libs/sherpa-onnx.aar 存在时，才把 src/localasr 加入编译。
+     * 没有 AAR 的构建完全不受影响，AsrProvider.LOCAL 会降级为「组件未编入」。
+     */
+    sourceSets {
+        getByName("main") {
+            if (localAsrAar.exists()) {
+                // Kotlin 源码必须走 kotlin.srcDir；写进 java.srcDir 不会被 Kotlin 编译器读取，
+                // 结果是类没进 dex、运行时反射失败并显示「未包含离线识别组件」。
+                kotlin.srcDir("src/localasr/kotlin")
+            }
+        }
+    }
+
     androidResources {
         localeFilters += listOf("b+zh+Hans")
     }
@@ -121,7 +138,7 @@ android {
         // 但安装时必须解压并生成完整 vdex（实测多占 8.5 MB），本机长期使用得不偿失。
         // 只在需要对外分发小包时临时打开。
         jniLibs {
-            useLegacyPackaging = true
+            useLegacyPackaging = false
             keepDebugSymbols += setOf("**/libproot_exec.so", "**/libproot_loader.so", "**/libeta_pty.so")
         }
         resources {
@@ -172,6 +189,8 @@ androidComponents {
 
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
+    // 离线语音引擎：可选依赖，AAR 缺失时 src/localasr 不参与编译
+    if (localAsrAar.exists()) implementation(files(localAsrAar))
     implementation(libs.jsoup)
     implementation(libs.commons.compress)
     implementation(libs.xz)

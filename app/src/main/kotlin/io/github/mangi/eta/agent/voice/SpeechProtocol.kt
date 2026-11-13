@@ -1,6 +1,7 @@
 package io.github.mangi.eta.agent.voice
 
 import io.github.mangi.eta.data.model.AsrProvider
+import io.github.mangi.eta.data.model.LocalSpeechConfig
 import io.github.mangi.eta.data.model.SpeechCredentials
 import io.github.mangi.eta.data.model.SpeechSettings
 import io.github.mangi.eta.data.model.TtsProvider
@@ -11,6 +12,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 internal enum class SpeechErrorCode {
     CONFIGURATION, CREDENTIALS, PERMISSION, AUDIO, NETWORK, TIMEOUT, AUTHENTICATION,
     RATE_LIMITED, SERVER, PROTOCOL, NO_SPEECH, BACKPRESSURE, STORAGE,
+    /** 安装包未编入离线识别组件。 */
+    LOCAL_BACKEND,
+    /** 离线模型缺失或加载失败。 */
+    LOCAL_MODEL,
 }
 
 internal class SpeechFailure(
@@ -68,6 +73,19 @@ internal fun validateSpeechSettings(settings: SpeechSettings, secrets: SpeechCre
         }
     } else when (settings.asr) {
         AsrProvider.SYSTEM -> Unit
+        AsrProvider.LOCAL -> {
+            // 本地后端不需要凭据，只做语法校验；模型是否就绪由识别时的后端自己判定。
+            val dir = settings.localAsr.modelDir.trim()
+            if (dir.isNotEmpty() && !dir.startsWith("/")) {
+                throw SpeechFailure(SpeechErrorCode.CONFIGURATION, "模型目录请填绝对路径，或留空使用默认目录")
+            }
+            if (settings.localAsr.threads !in 1..8) {
+                throw SpeechFailure(SpeechErrorCode.CONFIGURATION, "推理线程数须在 1～8 之间")
+            }
+            if (settings.localAsr.modelType !in LocalSpeechConfig.MODEL_TYPES) {
+                throw SpeechFailure(SpeechErrorCode.CONFIGURATION, "请选择本地模型类型")
+            }
+        }
         AsrProvider.DOUBAO -> {
             required(secrets.doubaoAsr, "豆包识别凭据")
             speechBaseUrl(settings.doubaoAsr.baseUrl)

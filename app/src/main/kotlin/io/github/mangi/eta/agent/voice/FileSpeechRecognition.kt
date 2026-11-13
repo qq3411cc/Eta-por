@@ -17,6 +17,12 @@ import org.json.JSONObject
 internal suspend fun recognizeSpeechFile(context: Context, settings: SpeechSettings, credentials: SpeechCredentials,
     wav: ByteArray, onProgress: (String) -> Unit): String = withContext(Dispatchers.IO) {
     withTimeout(300_000) {
+        if (settings.asr == AsrProvider.LOCAL) {
+            // 离线识别：不联网、不需要凭据，录音直接交给本地引擎。
+            onProgress("正在本地识别")
+            return@withTimeout LocalAsrBackends.current(context)
+                .recognize(wav, settings.localAsr, onProgress)
+        }
         val base = speechBaseUrl(settings.qwenAsr.endpoint())
         if (settings.asr == AsrProvider.QWEN_FLASH) {
             onProgress("正在识别")
